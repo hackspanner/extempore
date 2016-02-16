@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.1) # we use target_sources()
 
-option(MCJIT "use LLVM's MCJIT for codegen" ON)
 option(BOOST "use boost library" OFF)
 option(IN_TREE "use the Extempore source dir as EXT_SHARE_DIR - useful for developers" ON)
 option(ASIO "use the ASIO Portaudio backend" OFF)
@@ -300,7 +299,7 @@ endif()
 
 # the ordering of these libs matters, especially with the gcc linker.
 # Check the output of "llvm-config --libnames" to be sure
-set(EXT_LLVM_LIBRARIES "LLVMLTO;LLVMObjCARCOpts;LLVMLinker;LLVMBitWriter;LLVMIRReader;LLVMAsmParser;LLVMOption;LLVMTableGen;LLVMX86Disassembler;LLVMX86AsmParser;LLVMX86CodeGen;LLVMSelectionDAG;LLVMAsmPrinter;LLVMX86Desc;LLVMMCDisassembler;LLVMX86Info;LLVMX86AsmPrinter;LLVMX86Utils;LLVMMCJIT;LLVMipo;LLVMVectorize;LLVMInterpreter;LLVMExecutionEngine;LLVMRuntimeDyld;LLVMCodeGen;LLVMTarget;LLVMScalarOpts;LLVMObject;LLVMMCParser;LLVMBitReader;LLVMInstCombine;LLVMInstrumentation;LLVMTransformUtils;LLVMipa;LLVMMC;LLVMAnalysis;LLVMCore;LLVMSupport")
+set(EXT_LLVM_LIBRARIES "LLVMLTO;LLVMAnalysis;LLVMAsmParser;LLVMAsmPrinter;LLVMBitReader;LLVMBitWriter;LLVMCodeGen;LLVMCore;LLVMDebugInfoCodeView;LLVMDebugInfoDWARF;LLVMDebugInfoPDB;LLVMExecutionEngine;LLVMIRReader;LLVMInstCombine;LLVMInstrumentation;LLVMInterpreter;LLVMLTO;LLVMLibDriver;LLVMLineEditor;LLVMLinker;LLVMMC;LLVMMCDisassembler;LLVMMCJIT;LLVMMCParser;LLVMMIRParser;LLVMObjCARCOpts;LLVMObject;LLVMOption;LLVMOrcJIT;LLVMPasses;LLVMProfileData;LLVMRuntimeDyld;LLVMScalarOpts;LLVMSelectionDAG;LLVMSupport;LLVMSymbolize;LLVMTableGen;LLVMTarget;LLVMTransformUtils;LLVMVectorize;LLVMX86AsmParser;LLVMX86AsmPrinter;LLVMX86CodeGen;LLVMX86Desc;LLVMX86Disassembler;LLVMX86Info;LLVMX86Utils;LLVMipo")
 
 foreach(llvm_lib ${EXT_LLVM_LIBRARIES})
   list(APPEND LLVM_LIBRARIES "${EXT_LLVM_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}${llvm_lib}${CMAKE_STATIC_LIBRARY_SUFFIX}")
@@ -369,13 +368,6 @@ target_include_directories(extempore PRIVATE ${EXT_LLVM_DIR}/include)
 target_link_libraries(extempore PRIVATE ${LLVM_LIBRARIES})
 
 # compiler options
-
-if(MCJIT)
-  target_compile_definitions(extempore PRIVATE -DEXT_MCJIT)
-  message(STATUS "Using the new LLVM MCJIT backend...")
-else()
-  message(STATUS "Using the old LLVM JIT backend...")
-endif()
 
 if(PACKAGE)
   target_compile_definitions(extempore

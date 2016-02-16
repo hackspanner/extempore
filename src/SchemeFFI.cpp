@@ -56,14 +56,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
-#ifdef EXT_MCJIT
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Verifier.h"
-#else
-#include "llvm/Analysis/Verifier.h"
-#include "llvm/ExecutionEngine/JIT.h"
-#include "llvm/PassManager.h"
-#endif
 
 #include "SchemeFFI.h"
 #include "AudioDevice.h"
@@ -1007,11 +1001,7 @@ namespace extemp {
 
     pointer SchemeFFI::mcjitEnabled(scheme* _sc, pointer args)
     {
-#ifdef EXT_MCJIT
       return _sc->T;
-#else
-      return _sc->F;
-#endif
     }  
   
     pointer SchemeFFI::cmdarg(scheme* _sc, pointer args)
@@ -1603,36 +1593,23 @@ namespace extemp {
         return _sc->T;
     }
 
-#ifdef EXT_MCJIT
   static long long llvm_emitcounter = 0;
-#endif
+
   pointer SchemeFFI::jitCompileIRString(scheme* _sc, pointer args)
   {
     // Create some module to put our function into it.
     using namespace llvm;
     Module* M = EXTLLVM::I()->M;
-    legacy::PassManager* PM = extemp::EXTLLVM::I()->PM;
 
-#ifdef EXT_MCJIT
     char modname[256];
     sprintf(modname, "xtmmodule_%lld", ++llvm_emitcounter);
     char tmpbuf[1024];
-#endif
 
     char* assm = string_value(pair_car(args));
     SMDiagnostic pa;
     //ParseError pa;
     long long num_of_funcs = M->getFunctionList().size();
 
-#ifndef EXT_MCJIT
-    std::unique_ptr<llvm::Module> newModule = ParseAssemblyString(assm, M, pa, getGlobalContext());
-
-    if(EXTLLVM::OPTIMIZE_COMPILES)
-      {
-        PM->run(*M);
-      }
-
-#else
     std::string asmcode(assm);
     int cnt = 0;
 
@@ -1665,13 +1642,12 @@ namespace extemp {
           int cntt = 0;
           while(funcargs != func->getArgumentList().end())
             {			
-              Argument* a = funcargs;
               std::string typestr2;
               llvm::raw_string_ostream ss2(typestr2);
-              llvm::Type* t = a->getType();
+              llvm::Type* t = funcargs->getType();
               t->print(ss2);
               tmp_name = ss2.str().c_str();
-              if(a->getType()->isStructTy()) {	      
+              if(t->isStructTy()) {
                 rsplit((char*)eq_type_string,(char*)tmp_name,tmp_str_a,tmp_str_b);
               }
               funcargs++;
@@ -1721,11 +1697,9 @@ namespace extemp {
 
     if(EXTLLVM::OPTIMIZE_COMPILES)
       {
-        PM->run(*newModule);
+        extemp::EXTLLVM::I()->MPM->run(*M);
       }
 
-#endif
-  
     //std::stringstream ss;
     if(newModule == 0)
       {
@@ -1733,49 +1707,23 @@ namespace extemp {
         llvm::raw_string_ostream ss(errstr);
         pa.print("LLVM IR",ss);
         printf("%s\n",ss.str().c_str());
-#ifndef EXT_MCJIT    
-        // if the number of functions in module has changed when
-        // calling runFunction then we assume a stub was made and
-        // appended to the end of the modules function list. we remove
-        // this function now that we no longer need it!
-        if(num_of_funcs != M->getFunctionList().size()) {
-          iplist<Function>::iterator iter = M->getFunctionList().end();
-          Function* func = dyn_cast<Function>(--iter);
-          //std::cout << "REMOVING ON FAIL: " << *func << std::endl;
-          func->dropAllReferences();
-          func->removeFromParent();
-        }
-#endif
         return _sc->F;
       }else{
       if (extemp::EXTLLVM::VERIFY_COMPILES) {
         if (verifyModule(*M)) {
           std::cout << "\nInvalid LLVM IR\n";
-#ifndef EXT_MCJIT        
-          if(num_of_funcs != M->getFunctionList().size()) {
-            iplist<Function>::iterator iter = M->getFunctionList().end();
-            Function* func = dyn_cast<Function>(--iter);
-            //std::cout << "REMOVING ON FAIL: " << *func << std::endl;
-            func->dropAllReferences();
-            func->removeFromParent();
-          }
-#endif        
           return _sc->F;
         } 
       }
-#ifdef EXT_MCJIT
       llvm::Module *modulePtr = newModule.get();
       extemp::EXTLLVM::I()->EE->addModule(std::move(newModule));
       extemp::EXTLLVM::I()->addModule(modulePtr);
       extemp::EXTLLVM::I()->EE->finalizeObject();
 
-      // when using MCJIT, return a pointer to the module with the new
-      // functions in it - which we'll use later to export the bitcode
-      // during AOT-compilation
+      // return a pointer to the module with the new functions in it -
+      // which we'll use later to export the bitcode during
+      // AOT-compilation
       return mk_cptr(_sc, modulePtr);
-#else
-      return _sc->T;
-#endif
     }
   }
 	
@@ -1869,12 +1817,11 @@ namespace extemp {
     for (int i=0;i<Ms.size();i++) {
       M = Ms[i];    
       for (Module::const_iterator GI = M->begin(), GE = M->end(); GI != GE; ++GI) {
-        const llvm::Function* func = GI;
-        if (func->hasName() && rmatch((char*)&rgx[0],(char*)func->getName().data())) {
-          //printf("HIT %s\n",func->getName().data());
+        if (GI->hasName() && rmatch((char*)&rgx[0],(char*)GI->getName().data())) {
+          //printf("HIT %s\n",GI->getName().data());
           std::string str;
           llvm::raw_string_ostream ss(str);
-          ss << *func;
+          ss << *GI;
           printf("\n---------------------------------------------------\n%s",str.c_str());        
         }
       }
@@ -1897,12 +1844,11 @@ namespace extemp {
     for (int i=0;i<Ms.size();i++) {
       M = Ms[i];
       for (Module::const_iterator GI = M->begin(), GE = M->end(); GI != GE; ++GI) {
-        const llvm::Function* func = GI;
-        if (func->hasName() && rmatch((char*)&rgx[0],(char*)func->getName().data())) {
-          //printf("HIT %s\n",func->getName().data());
+        if (GI->hasName() && rmatch((char*)&rgx[0],(char*)GI->getName().data())) {
+          //printf("HIT %s\n",GI->getName().data());
           std::string str;
           llvm::raw_string_ostream ss(str);
-          ss << *func;
+          ss << *GI;
           printf("\n---------------------------------------------------\n%s",str.c_str());        
         }
       }
@@ -1926,9 +1872,8 @@ namespace extemp {
     for (int i=0;i<Ms.size();i++) {
       M = Ms[i];    
       for (Module::const_iterator GI = M->begin(), GE = M->end(); GI != GE; ++GI) {
-        const llvm::Function* func = GI;
-        if (func->hasName() && rmatch((char*)&rgx[0],(char*)func->getName().data())) {
-          last_name = (char*)func->getName().data();
+        if (GI->hasName() && rmatch((char*)&rgx[0],(char*)GI->getName().data())) {
+          last_name = (char*)GI->getName().data();
         }
       }
     }
@@ -1962,11 +1907,6 @@ namespace extemp {
   {
     using namespace llvm;
 
-#ifdef EXT_MCJIT
-    legacy::PassManager* PM = extemp::EXTLLVM::I()->PM;
-#else
-    PassManager* PM = extemp::EXTLLVM::I()->PM;
-#endif
     char* struct_type_str = string_value(pair_car(args));
     unsigned long long hash = string_hash((unsigned char*)struct_type_str);
     char name[128];
@@ -1975,12 +1915,9 @@ namespace extemp {
     sprintf(assm,"%%%s = type %s",name,struct_type_str);
     //printf("parse this! %s\n",assm);
     SMDiagnostic pa;
-    // Don't!! write this into the default module!
-#ifdef EXT_MCJIT
+
     std::unique_ptr<llvm::Module> newM = parseAssemblyString(assm, pa, getGlobalContext());
-#else
-    const Module* newM = ParseAssemblyString(assm, NULL, pa, getGlobalContext());
-#endif
+
     if(newM == 0)
       {
         return _sc->F;
@@ -2053,11 +1990,8 @@ namespace extemp {
   {
     using namespace llvm;
 
-#ifdef EXT_MCJIT
     Module* m = (Module *)cptr_value(pair_car(args));
-#else
-    Module* m = EXTLLVM::I()->M;
-#endif // EXT_MCJIT
+
     if(m == 0)
       {
         return _sc->F;
@@ -2137,15 +2071,14 @@ namespace extemp {
     Function::ArgumentListType::iterator funcargs = func->getArgumentList().begin();
     while(funcargs != func->getArgumentList().end())
       {			
-        Argument* a = funcargs;
         _sc->imp_env->insert(p);					
         std::string typestr2;
         llvm::raw_string_ostream ss2(typestr2);
-        a->getType()->print(ss2);
+        funcargs->getType()->print(ss2);
 
         tmp_name = ss2.str().c_str();
 
-        if(a->getType()->isStructTy()) {	      
+        if(funcargs->getType()->isStructTy()) {
           rsplit((char*)eq_type_string,(char*)tmp_name,tmp_str_a,tmp_str_b);
           //printf("tmp:%s  a:%s  b:%s\n",(char*)tmp_name,tmp_str_a,tmp_str_b);
           tmp_name = tmp_str_a;
@@ -2209,11 +2142,6 @@ namespace extemp {
       {
         return _sc->F;
       }
-#ifndef EXT_MCJIT    
-    extemp::EXTLLVM::I()->EE->lock.acquire();
-    extemp::EXTLLVM::I()->EE->freeMachineCodeForFunction(func);
-    extemp::EXTLLVM::I()->EE->lock.release();
-#endif    
     func->deleteBody();
     func->eraseFromParent();
 
@@ -2320,14 +2248,8 @@ namespace extemp {
     try{
       EXTLLVM* xll = EXTLLVM::I();
       ExecutionEngine* EE = xll->EE;
-      
-#ifdef EXT_MCJIT
       void* p = NULL;
-#else      
-      EE->lock.acquire();
-      void* p = EE->recompileAndRelinkFunction(func);
-      EE->lock.release();
-#endif      
+
     }catch(std::exception& e) {
       std::cout << "EXCEPT: " << e.what() << std::endl;
     }
@@ -2379,26 +2301,25 @@ namespace extemp {
 	//std::cout << "ARGS: " << lgth << std::endl;
 	for(int i=0;i<lgth;i++,++funcargs)
 	{
-	    Argument* a = funcargs;
 	    pointer p = list_ref(_sc, i, args);
 	    if(is_integer(p)) {
-		if(a->getType()->getTypeID() != Type::IntegerTyID)
+		if(funcargs->getType()->getTypeID() != Type::IntegerTyID)
 		{
 		    printf("Bad argument type %i\n",i);
 		    return _sc->F;
 		}
-		int width = a->getType()->getPrimitiveSizeInBits();
-		//std::cout << "TYPE: " << a->getType()->getTypeID() << std::endl;				
+		int width = funcargs->getType()->getPrimitiveSizeInBits();
+		//std::cout << "TYPE: " << funcargs->getType()->getTypeID() << std::endl;
 		fargs[i].IntVal = APInt(width,ivalue(p));
 	    }			
 	    else if(is_real(p))
 	    {
 
-		if(a->getType()->getTypeID() == Type::FloatTyID)
+		if(funcargs->getType()->getTypeID() == Type::FloatTyID)
 		{
 		    fargs[i].FloatVal = (float) rvalue(p);
 		}
-		else if(a->getType()->getTypeID() == Type::DoubleTyID)
+		else if(funcargs->getType()->getTypeID() == Type::DoubleTyID)
 		{
 		    fargs[i].DoubleVal = rvalue(p);
 		}
@@ -2410,7 +2331,7 @@ namespace extemp {
 	    }
 	    else if(is_string(p))
 	    {
-		if(a->getType()->getTypeID() != Type::PointerTyID)
+		if(funcargs->getType()->getTypeID() != Type::PointerTyID)
 		{
 		    printf("Bad argument type %i\n",i);
 		    return _sc->F;					
@@ -2420,7 +2341,7 @@ namespace extemp {
 	    }						
 	    else if(is_cptr(p))
 	    {
-		if(a->getType()->getTypeID() != Type::PointerTyID)
+		if(funcargs->getType()->getTypeID() != Type::PointerTyID)
 		{
 		    printf("Bad argument type %i\n",i);
 		    return _sc->F;

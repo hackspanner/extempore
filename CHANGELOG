@@ -1,4 +1,13 @@
 ==============
+Extempore 0.61
+==============
+
+	* update LLVM to 3.8.0
+	* improved generics performance
+	* add auto-polying for multiply-defined functions
+	* remove EXT_MCJIT flag, Extempore now only supports MCJIT
+
+==============
 Extempore 0.60
 ==============
 

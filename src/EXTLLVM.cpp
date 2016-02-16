@@ -51,6 +51,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/LinkAllPasses.h"
 #include "llvm/Support/SourceMgr.h"
@@ -1475,9 +1476,7 @@ namespace extemp {
 	M = 0;
 	MP = 0;
 	EE = 0;
-#ifdef EXT_MCJIT
   MM = 0;
-#endif
 	//initLLVM();
     }
 	
@@ -1543,11 +1542,9 @@ namespace extemp {
     return NULL;
   }
 
-#ifdef EXT_MCJIT  
     uint64_t EXTLLVM::getSymbolAddress(std::string name) {      
       return MM->getSymbolAddress(name);
     }
-#endif
 
 
 	
@@ -1559,13 +1556,11 @@ namespace extemp {
       llvm::TargetOptions Opts;
 
 #ifdef _WIN32
-      // guaranteed tail call *still* not supported on Windows
       Opts.GuaranteedTailCallOpt = false;
 #else
       Opts.GuaranteedTailCallOpt = true;
 #endif
       Opts.UnsafeFPMath = false;
-
 
       llvm::InitializeNativeTarget();
       llvm::InitializeNativeTargetAsmPrinter();
@@ -1587,12 +1582,9 @@ namespace extemp {
       factory.setEngineKind(llvm::EngineKind::JIT);
       // factory.setAllocateGVsWithCode(false);
       factory.setTargetOptions(Opts);
-#ifdef EXT_MCJIT
       std::unique_ptr<llvm::SectionMemoryManager> MM = llvm::make_unique<llvm::SectionMemoryManager>();
       factory.setMCJITMemoryManager(std::move(MM));
-#else          
-      factory.setUseMCJIT(false);
-#endif
+
       //if(!extemp::UNIV::ARCH.empty()) factory.setMArch(extemp::UNIV::ARCH.front());
       // if(!extemp::UNIV::ATTRS.empty()) factory.setMAttrs(extemp::UNIV::ATTRS);
       // if(!extemp::UNIV::CPU.empty()) factory.setMCPU(extemp::UNIV::CPU.front());
@@ -1662,39 +1654,21 @@ namespace extemp {
       std::cout << "LLVM           : " << std::flush;
       ascii_text_color(1,6,10);
       std::cout << LLVM_VERSION_STRING;
-#ifdef EXT_MCJIT
       std::cout << " MCJIT" << std::endl;
-#else
-      std::cout << " JIT" << std::endl;
-#endif          
       ascii_text_color(0,7,10);
           
 
-			
-	    //EE = llvm::EngineBuilder(M).create();
-	    PM = new llvm::legacy::PassManager();
-	    //PM->add(new llvm::TargetData(*EE->getTargetData()));
-      // PM->add(new llvm::DataLayout(*(EE->getDataLayout())));
+      // optimisation passes - first set up the pass managers
+      MPM = new llvm::legacy::PassManager();
 
-      PM->add(llvm::createBasicAliasAnalysisPass());   //new   
-      // promote allocs to register
-      PM->add(llvm::createPromoteMemoryToRegisterPass());
-	    // Do simple "peephole" optimizations and bit-twiddling optzns.
-	    PM->add(llvm::createInstructionCombiningPass());
-	    // Reassociate expressions.
-	    PM->add(llvm::createReassociatePass());
-	    // Eliminate Common SubExpressions.
-	    PM->add(llvm::createGVNPass());
-	    // Function inlining
-	    PM->add(llvm::createFunctionInliningPass());
-	    // loop invariants
-	    PM->add(llvm::createLICMPass());
-	    // vars
-	    PM->add(llvm::createIndVarSimplifyPass());
-	    // Simplify the control flow graph (deleting unreachable blocks, etc).
-	    PM->add(llvm::createCFGSimplificationPass());
-      //
-	    PM->add(llvm::createPromoteMemoryToRegisterPass());
+      // FunctionPassManager is currently unused, but we could use it in the future
+      // FPM = new llvm::legacy::FunctionPassManager(M);
+
+      // use the standard C/C++ -O2 optimisation passes
+      llvm::PassManagerBuilder builder;
+      builder.OptLevel = 2;
+      // builder.populateFunctionPassManager(*FPM);
+      builder.populateModulePassManager(*MPM);
 
       // tell LLVM about some built-in functions
 	    EE->updateGlobalMapping("llvm_disassemble", (uint64_t)&llvm_disassemble);      
@@ -1822,9 +1796,8 @@ namespace extemp {
       EE->updateGlobalMapping("llvm_atan2", (uint64_t)&llvm_atan2);
       EE->updateGlobalMapping("sys_sharedir", (uint64_t)&sys_sharedir);
       EE->updateGlobalMapping("sys_slurp_file", (uint64_t)&sys_slurp_file);
-#ifdef EXT_MCJIT
+
       extemp::EXTLLVM::I()->EE->finalizeObject();
-#endif
       return;
     }
   }

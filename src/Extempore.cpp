@@ -44,8 +44,6 @@
 #ifndef _WIN32
 #include <unistd.h>
 #include <signal.h>
-#endif
-#if defined(_WIN32) && defined(EXT_MCJIT)
 #include "llvm/Support/Host.h"
 #endif
 #ifdef __APPLE__
@@ -268,14 +266,6 @@ int main(int argc, char** argv)
     std::cout << "andrew@moso.com.au, @digego" << std::endl;
     std::cout << std::endl;
     ascii_text_color(0,9,10);
-
-#if defined(_WIN32) && defined(EXT_MCJIT)
-	// on Windows with MCJIT we need to add "-elf" to the target triple, see
-	// http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-December/068407.html
-	if (extemp::UNIV::ARCH.empty()) {
-		extemp::UNIV::ARCH.push_back(llvm::sys::getProcessTriple() + std::string("-elf"));
-	};
-#endif
 
     extemp::TaskScheduler::I()->start();
     extemp::EXTLLVM::I()->initLLVM();
