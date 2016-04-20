@@ -10,9 +10,9 @@
 
 (bind-dylib openvrlib
   (cond ((string=? (sys:platform) "OSX")
-         (begin (println "OpenVR Not Supported on MacOS") #f))
+         "libopenvr_api.dylib")
         ((string=? (sys:platform) "Linux")
-         (begin (println "OpenVR Not Supported on Linux") #f))
+         "libopenvr_api.so")
         ((string=? (sys:platform) "Windows")
          "openvr_api.dll")))
 
@@ -44,7 +44,9 @@
   (let ((init_error:i32* (zalloc))
         (init_result:i32* (zalloc)))
     (lambda ()
-      (let ((init_result (VR_InitInternal error 1)))
-        (if (= (pref init_error) 0)
+      (let ((init_error_ptr:i32* (salloc))
+            (init_result_ptr:i32* (salloc)))
+        (VR_InitInternal init_error_ptr 1)   
+        (if (= (pref init_error_ptr 0) 0)
           (println "Success")
           (println "Failure"))))))
