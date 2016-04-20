@@ -1,0 +1,50 @@
+;;; openvr.xtm -- open vr bindings for Extempore
+
+;; Author: David Tin Nyo
+;; Keywords: extempore virtual reality vive htc valve
+;; Required dylibs: openvr_api
+
+;;; Commentary:
+
+;;; Code:
+
+(bind-dylib openvrlib
+  (cond ((string=? (sys:platform) "OSX")
+         (begin (println "OpenVR Not Supported on MacOS") #f))
+        ((string=? (sys:platform) "Linux")
+         (begin (println "OpenVR Not Supported on Linux") #f))
+        ((string=? (sys:platform) "Windows")
+         "openvr_api.dll")))
+
+;;;;;;;;;;;;;;
+;; openvr_capi.h 
+;;;;;;;;;;;;;;
+
+(bind-alias intptr_t i32*)
+(bind-alias EVRInitError enum)
+(bind-alias EVRApplicationType enum)
+
+(bind-lib openvrlib VR_InitInternal [i32*,enum*,enum]*) 
+(bind-lib openvrlib VR_ShutdownInternal [i8*]*)
+(bind-lib openvrlib VR_IsHmdPresent [i32]*)
+;;(bind-lib openvrlib VR_GetGenericInterface [intptr_t,i8*,i32*]*)
+(bind-lib openvrlib VR_IsRuntimeInstalled [i32]*)
+;;(bind-lib openvrlib VR_GetVRInitErrorAsSymbol [i8*,i32]*)
+;;(bind-lib openvrlib VR_GetVRInitErrorAsEnglishDescription [i8*,i32]*)
+
+(bind-func vr-has-hmd
+  (lambda ()
+    (VR_IsHmdPresent)))
+
+(bind-func vr-has-runtime
+  (lambda ()
+    (VR_IsRuntimeInstalled)))
+
+(bind-func vr-init
+  (let ((init_error:i32* (zalloc))
+        (init_result:i32* (zalloc)))
+    (lambda ()
+      (let ((init_result (VR_InitInternal error 1)))
+        (if (= (pref init_error) 0)
+          (println "Success")
+          (println "Failure"))))))
