@@ -14,11 +14,20 @@
 (sys:load "libs/contrib/openvr.xtm")
 
 ;; initialize
-(bind-val pHmd HmdPtr (vr-init))
-
+(bind-val pError i32* 1)
+(bind-val appType i32 1) ;; VR_Scene
+(bind-val pHmd intptr_t (VR_InitInternal pError appType))
+;; wait a bit
+(sys:sleep (* 10 44100))
+;; shutdown
+(bind-val temp i8* (VR_ShutdownInternal))
 ;; early quit
 (quit 0)
 
+
+;; the rest of this taken from Andrew Sorensen
+;; and the xtmrender2.xtm example
+;; 
 (bind-val width i32 1024)
 (bind-val height i32 768)
 
