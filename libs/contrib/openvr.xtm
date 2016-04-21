@@ -20,17 +20,17 @@
 ;; openvr_capi.h 
 ;;;;;;;;;;;;;;
 
-(bind-alias intptr_t i32*)
-(bind-alias EVRInitError enum)
+(bind-alias HmdPtr i32*) ;;intptr_t
+(bind-alias EVRInitError enum) 
 (bind-alias EVRApplicationType enum)
 
-(bind-lib openvrlib VR_InitInternal [i32*,enum*,enum]*) 
+(bind-lib openvrlib VR_InitInternal [HmdPtr,EVRInitError*,EVRApplicationType]*) 
 (bind-lib openvrlib VR_ShutdownInternal [i8*]*)
-(bind-lib openvrlib VR_IsHmdPresent [i32]*)
-;;(bind-lib openvrlib VR_GetGenericInterface [intptr_t,i8*,i32*]*)
-(bind-lib openvrlib VR_IsRuntimeInstalled [i32]*)
-;;(bind-lib openvrlib VR_GetVRInitErrorAsSymbol [i8*,i32]*)
-;;(bind-lib openvrlib VR_GetVRInitErrorAsEnglishDescription [i8*,i32]*)
+(bind-lib openvrlib VR_IsHmdPresent [i1]*)
+(bind-lib openvrlib VR_GetGenericInterface [HmdPtr,i8*,i32*]*)
+(bind-lib openvrlib VR_IsRuntimeInstalled [i1]*)
+(bind-lib openvrlib VR_GetVRInitErrorAsSymbol [i8*,i32]*)
+(bind-lib openvrlib VR_GetVRInitErrorAsEnglishDescription [i8*,i32]*)
 
 (bind-func vr-has-hmd
   (lambda ()
@@ -40,13 +40,16 @@
   (lambda ()
     (VR_IsRuntimeInstalled)))
 
-(bind-func vr-init
-  (let ((init_error:i32* (zalloc))
-        (init_result:i32* (zalloc)))
+;; vr-init
+;; arguments:
+;;  none
+;; returns:
+;;  HmdPtr  
+(bind-func vr-init 
+  (let ((init_error_ptr:i32* (salloc)))
     (lambda ()
-      (let ((init_error_ptr:i32* (salloc))
-            (init_result_ptr:i32* (salloc)))
-        (VR_InitInternal init_error_ptr 1)   
-        (if (= (pref init_error_ptr 0) 0)
-          (println "Success")
-          (println "Failure"))))))
+      (let ((hmdptr (VR_InitInternal init_error_ptr 1)) ;; open as VR Scene
+            (errnum (pref init_error_ptr 0)))
+        (if (= errnum 0)
+          hmdptr
+          (begin (println "Error:" errnum ) hmdptr))))))

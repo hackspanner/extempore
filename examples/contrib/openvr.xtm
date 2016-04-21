@@ -12,18 +12,11 @@
 ;;(sys:load "libs/external/glfw3.xtm")
 
 (sys:load "libs/contrib/openvr.xtm")
+
 ;; initialize
-(vr-init)
-;; check if Runtime available
-(if (vr-has-runtime) 
-  (println "Found an active VR runtime!" (vr-has-runtime))
-  (println "VR runtime not active!" ))  
+(bind-val pHmd HmdPtr (vr-init))
 
-;; check if HMD available
-(if (vr-has-hmd) 
-  (println "Found a VR device!" (vr-has-hmd))
-  (println "No VR device was found!" )) 
-
+;; early quit
 (quit 0)
 
 (bind-val width i32 1024)
