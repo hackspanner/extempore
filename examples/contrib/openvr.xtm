@@ -9,14 +9,17 @@
 
 ;;; Code:
 
-;;(sys:load "libs/external/glfw3.xtm")
+(sys:load "libs/external/glfw3.xtm")
 
 (sys:load "libs/contrib/openvr.xtm")
 
+(bind-func show-error
+  (lambda (errptr:i32*)
+      (printf "vr-error:%d\n" (pref errptr 0))))
+
 ;; initialize
-(bind-val pError i32* 1)
-(bind-val appType i32 1) ;; VR_Scene
-(bind-val pHmd intptr_t (VR_InitInternal pError appType))
+(openvr-init 1) ;; apptype=scene
+(println "error=" *openvr-lasterror*)
 ;; wait a bit
 (sys:sleep (* 10 44100))
 ;; shutdown

@@ -30,3 +30,19 @@
 (bind-lib openvrlib VR_GetVRInitErrorAsSymbol [i8*,i32]*)
 (bind-lib openvrlib VR_GetVRInitErrorAsEnglishDescription [i8*,i32]*)
 
+
+(bind-val *openvr-lasterror* i32 0)
+
+;; arg: i32 [application type]
+;; return: intptr_t [ptr to hmd]
+(bind-func openvr-init
+           (lambda (apptype:i32)
+             (let ((ppHmd:intptr_t* (zalloc))
+                   (pErr:i32* (salloc)))
+               (pset! ppHmd 0 (VR_InitInternal pErr apptype))
+               (set! *openvr-lasterror* (pref pErr 0))
+               (pref ppHmd 0))))
+
+(bind-func openvr-shutdown
+           (lambda ()
+             (VR_ShutdownInternal)))
